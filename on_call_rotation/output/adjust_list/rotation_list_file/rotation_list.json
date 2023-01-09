@@ -1,0 +1,18 @@
+{
+	"oncallList": [{
+		"userName": "Mickey Mouse",
+		"phoneNumber": "5552221111"
+	}, {
+		"userName": "Donald Duck",
+		"phoneNumber": "55522211112"
+	}, {
+		"userName": "Goofy",
+		"phoneNumber": "5552221113"
+	}, {
+		"userName": "Snow White",
+		"phoneNumber": "5552221114"
+	}, {
+		"userName": "Buzz Lightyear",
+		"phoneNumber": "5552221115"
+	}]
+}
