@@ -11,26 +11,6 @@ CALL_ID = 'globalCallID_callId'
 CALLING_DEVICE = 'origDeviceName'
 CALLED_DEVICE = 'destDeviceName'
 
-class AllCallsList:
-    def __init__(self):
-        self.call_list = self.get_call_list()
-    def get_call_list(self):
-        cdr_data = pd.read_csv(FILE, low_memory=False)
-        i, call_list = 0, []
-        while i < len(cdr_data):
-            call_id, start_time, end_time, calling_device, called_device, origination_time = cdr_data[CALL_ID][i], cdr_data[START_TIME][i], cdr_data[END_TIME][i], cdr_data[CALLING_DEVICE][i], cdr_data[CALLED_DEVICE][i], cdr_data[ORIGINATION_TIME][i]
-            if start_time == 0:
-                start_time = origination_time
-            if start_time != end_time and start_time < end_time:
-                minutes = ceil((end_time - start_time) / 60)
-                if calling_device in PRIS:
-                    call_list.append([call_id, start_time, end_time, minutes])
-                if called_device in PRIS:
-                    call_list.append([call_id, start_time, end_time, minutes])
-            i += 1
-        return call_list
-
-
 
 PRIS = [
 'S0/SU1/DS1-0@gw6-voip.jpl.nasa.gov',
@@ -58,60 +38,117 @@ PRIS = [
 'S0/SU2/DS1-5@gw7-voip.jpl.nasa.gov',
 'S0/SU2/DS1-7@gw7-voip.jpl.nasa.gov']
 
-def get_call_list():
-    cdr_data = pd.read_csv(FILE, low_memory=False)
-    i, call_list = 0, []
-    while i < len(cdr_data):
-        call_id, start_time, end_time, calling_device, called_device, origination_time = cdr_data[CALL_ID][i], cdr_data[START_TIME][i], cdr_data[END_TIME][i], cdr_data[CALLING_DEVICE][i], cdr_data[CALLED_DEVICE][i], cdr_data[ORIGINATION_TIME][i]
-        if start_time == 0:
-            start_time = origination_time
-        if start_time != end_time and start_time < end_time:
-            minutes = ceil((end_time - start_time) / 60)
+
+class AllCallsList:
+    def __init__(self):
+        self.call_list = self.get_call_list()
+        self.start_point = 0
+    def get_call_list(self):
+        print('Generating DataFrame of PRI CALLS')
+        print('This takes a few minutes, please be patient.')
+        cdr_data = pd.read_csv(FILE, low_memory=False)
+        # Remove unneeded columns.  Even though we only pass through this list once, theres no point in slowing things down any further.
+        cdr_data = cdr_data[[CALL_ID, START_TIME, END_TIME, ORIGINATION_TIME, CALLING_DEVICE, CALLED_DEVICE]]
+        pri_calls = pd.DataFrame()
+        i = 0
+        while i < len(cdr_data):
+            call_id, call_connect, call_disconnect, call_origination, calling_device, called_device = cdr_data[CALL_ID][i], cdr_data[START_TIME][i], cdr_data[END_TIME][i], cdr_data[ORIGINATION_TIME][i], cdr_data[CALLING_DEVICE][i], cdr_data[CALLED_DEVICE][i]
+            if call_connect == 0:
+                call_connect = call_origination
+            if call_connect == call_disconnect:
+                i += 1
+                continue
+            call_row = pd.DataFrame([[call_id, call_connect, call_disconnect]], columns=['call_id', 'call_connect', 'call_disconnect'])
             if calling_device in PRIS:
-                call_list.append([call_id, start_time, end_time, minutes])
+                pri_calls = pd.concat([pri_calls, call_row])
             if called_device in PRIS:
-                call_list.append([call_id, start_time, end_time, minutes])
+                pri_calls = pd.concat([pri_calls, call_row])
+            i += 1
+        pri_calls.sort_values('call_connect', inplace=True)
+        pri_calls.reset_index(inplace=True, drop=True)
+        return pri_calls
+
+master_list = AllCallsList()
+
+
+
+
+
+
+def get_calls_that_occured_during(start_time, end_time):
+    i = master_list.start_point
+    if debug:
+        i = 0
+    matches = []
+    next_start_point = 0
+    while i < len(master_list.call_list):
+        check_start_time = master_list.call_list['call_connect'][i]
+        check_end_time = master_list.call_list['call_connect'][i]
+        # We're checking where in the list calls start before our referenced call end.  And that we pass wont need to be checked on the next sweep
+        # since the start time should always increment.  We'll set this back in our class at the end of this function.
+        if check_end_time < start_time:
+            next_start_point = i
+        # Now we need to see which calls occur within the referenced call, and count them.
+        if check_start_time >= start_time and check_start_time <= end_time: # Start during
+            matches.append(i)
+        elif check_end_time >= start_time and check_end_time <= end_time: # End During
+            matches.append(i)
+        elif check_start_time < start_time and check_end_time > end_time: # Start before and end after
+            matches.append(i)
+        #Once we reach a point where calls are starting after our referenced end time, we can stop, since no other calls would be in the window.
+        if check_start_time > end_time:
+            break
         i += 1
-    return call_list
+    master_list.start_point = next_start_point
+    results = master_list.call_list.iloc[matches]
+    results.reset_index(inplace=True, drop=True)
+    return results
 
-
-
-def check_active_call(start_time, end_time, df_call_list):
-    total_active = 0
-    total_active += call_inside_call_boundary(start_time, end_time, df_call_list)
-    # FOR THOSE READING MY CODE, THIS SECTION HAS GONE THROUGH DOZENS OF REVISIONS TO TRY TO GET IT RIGHT
-    # I think I'm going to make a class out of list of calls, this way I dont have to keep passing information back and forth between functions, and I dont have use any global variables.
-    return active_count
-
-
-def call_inside_call_boundary(start_time, end_time, df_call_list):
-    after = df_call_list[df_call_list['start_time'] <= start_time]
-    before = after[after['end_time'] >= end_time]
-    return len(before)
-
-
-
-
-def get_active_calls():
-    active_calls = []
-    call_list = get_call_list()
-    df_call_list = pd.DataFrame(call_list)
-    df_call_list = df_call_list.rename(columns={0: "call_id", 1: "start_time", 2: "end_time", 3: "minutes"})
-    df_call_list = df_call_list.sort_values('start_time')
-    df_call_list.reset_index(inplace=True, drop=True)
+def get_active_call_count(start_time, end_time):
+    calls_during_window = get_calls_that_occured_during(start_time, end_time)
+    max_count = 0
     i = 0
-    for call in call_list:
-        call_id, start_time, end_time, minutes = call[0], call[1], call[2], call[3]
-        if call_id == 0:
+    start_check, end_check = calls_during_window['call_connect'].min(), calls_during_window['call_disconnect'].max()
+    while start_check > end_check + 1:
+        current_count = len(calls_during_window)
+        i = 0
+        while i < len(calls_during_window):
+            call_start, call_end = calls_during_window['call_connect'][i], calls_during_window['call_disconnect'][i]
+            if not call_start <= start_check or call_end >= end_check:
+                current_count -= 1
+            if current_count >= max_count:
+                max_count = current_count
+            i += 1
+        start_check += 1
+    return max_count
+
+
+
+
+
+
+def create_csv_with_active_call_count():
+    check_list = master_list.call_list
+    compiled_csv = pd.DataFrame()
+    i = 0
+    while i < len(check_list):
+        if i != 0 and i % 1000 == 0:
+            print(f'Checked {i} out of {len(check_list)} records.')
+        call_id, start_time, end_time = check_list['call_id'][i], check_list['call_connect'][i], check_list['call_disconnect'][i]
+        # skip garbage data
+        if call_id == 0 or start_time == 0 or end_time == 0:
             i += 1
             continue
-        active_count = call_inside_call_boundary(start_time, end_time, df_call_list)
-        #active_count = check_active_call(start_time, end_time, df_call_list)
-        active_calls.append([call_id, datetime.fromtimestamp(start_time), minutes, active_count])
-        if active_count
-        print(i, active_count)
+        active_calls_count = check_call_active_count(start_time, end_time)
+        call_row = pd.DataFrame([[call_id, datetime.fromtimestamp(start_time), datetime.fromtimestamp(end_time), active_calls_count, start_time, end_time]], columns=['call_id', 'start_time', 'end_time', 'active_calls', 'start_unix', 'end_unix'])
+        compiled_csv = pd.concat([compiled_csv, call_row])
         i += 1
-    return active_calls
+    peak_calls_active = compiled_csv['active_calls'].max()
+    print(f'Peak pri usage = {peak_calls_active} calls.')
+    return compiled_csv
+
+
+
 
 
 def test_data():
