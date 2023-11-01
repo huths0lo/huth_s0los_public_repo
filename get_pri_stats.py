@@ -5,11 +5,30 @@ from copy import deepcopy
 
 FILE = 'October_2023.csv'
 START_TIME = 'dateTimeConnect'
-END_TIME = 'dateTimeOrigination'
-ORIGINATION_TIME = 'dateTimeDisconnect'
+END_TIME = 'dateTimeDisconnect'
+ORIGINATION_TIME = 'dateTimeOrigination'
 CALL_ID = 'globalCallID_callId'
 CALLING_DEVICE = 'origDeviceName'
 CALLED_DEVICE = 'destDeviceName'
+
+class AllCallsList:
+    def __init__(self):
+        self.call_list = self.get_call_list()
+    def get_call_list(self):
+        cdr_data = pd.read_csv(FILE, low_memory=False)
+        i, call_list = 0, []
+        while i < len(cdr_data):
+            call_id, start_time, end_time, calling_device, called_device, origination_time = cdr_data[CALL_ID][i], cdr_data[START_TIME][i], cdr_data[END_TIME][i], cdr_data[CALLING_DEVICE][i], cdr_data[CALLED_DEVICE][i], cdr_data[ORIGINATION_TIME][i]
+            if start_time == 0:
+                start_time = origination_time
+            if start_time != end_time and start_time < end_time:
+                minutes = ceil((end_time - start_time) / 60)
+                if calling_device in PRIS:
+                    call_list.append([call_id, start_time, end_time, minutes])
+                if called_device in PRIS:
+                    call_list.append([call_id, start_time, end_time, minutes])
+            i += 1
+        return call_list
 
 
 
@@ -54,6 +73,7 @@ def get_call_list():
                 call_list.append([call_id, start_time, end_time, minutes])
         i += 1
     return call_list
+
 
 
 def check_active_call(start_time, end_time, df_call_list):
