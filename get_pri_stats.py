@@ -13,7 +13,7 @@ CALLED_DEVICE = 'destDeviceName'
 
 
 
-pris = [
+PRIS = [
 'S0/SU1/DS1-0@gw6-voip.jpl.nasa.gov',
 'S0/SU1/DS1-0@gw7-voip.jpl.nasa.gov',
 'S0/SU1/DS1-1@gw7-voip.jpl.nasa.gov',
@@ -48,9 +48,9 @@ def get_call_list():
             start_time = origination_time
         if start_time != end_time and start_time < end_time:
             minutes = ceil((end_time - start_time) / 60)
-            if calling_device in pris:
+            if calling_device in PRIS:
                 call_list.append([call_id, start_time, end_time, minutes])
-            if called_device in pris:
+            if called_device in PRIS:
                 call_list.append([call_id, start_time, end_time, minutes])
         i += 1
     return call_list
@@ -59,10 +59,8 @@ def get_call_list():
 def check_active_call(start_time, end_time, df_call_list):
     total_active = 0
     total_active += call_inside_call_boundary(start_time, end_time, df_call_list)
-
-
-    after = before[before['start_time'] >= end_time]
-    active_count = len(after)
+    # FOR THOSE READING MY CODE, THIS SECTION HAS GONE THROUGH DOZENS OF REVISIONS TO TRY TO GET IT RIGHT
+    # I think I'm going to make a class out of list of calls, this way I dont have to keep passing information back and forth between functions, and I dont have use any global variables.
     return active_count
 
 
